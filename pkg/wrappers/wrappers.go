@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/DKW2/MuCache_Extended/pkg/cm"
 	"github.com/DKW2/MuCache_Extended/pkg/common"
+	"github.com/DKW2/MuCache_Extended/pkg/latency"
 	"github.com/DKW2/MuCache_Extended/pkg/utility"
 	"github.com/goccy/go-json"
 	"github.com/golang/glog"
@@ -127,6 +128,7 @@ func PreCall(ctx context.Context, ca cm.CallArgs) (cm.ReturnVal, bool) {
 
 func ROWrapper[ReqType interface{}, RespType interface{}](handler func(context.Context, *ReqType) *RespType) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		tTotal := time.Now()
 		ctx, input := SetupCtxFromHTTPReq(r, true)
 
 		var req ReqType
@@ -134,8 +136,9 @@ func ROWrapper[ReqType interface{}, RespType interface{}](handler func(context.C
 		if err != nil {
 			panic(err)
 		}
-		//glog.Info("Start Handler")
+		tHandler := time.Now()
 		resp := handler(ctx, &req)
+		latency.Record("wrapper_handler", time.Since(tHandler))
 
 		respByte, err := json.Marshal(*resp)
 		if err != nil {
@@ -146,23 +149,28 @@ func ROWrapper[ReqType interface{}, RespType interface{}](handler func(context.C
 
 		PreReqEnd(ctx, cm.ReturnVal(respByte))
 		utility.DumpJson(resp, w)
+		latency.Record("wrapper_total", time.Since(tTotal))
 	}
 }
 
 func NonROWrapper[ReqType interface{}, RespType interface{}](handler func(context.Context, *ReqType) *RespType) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		tTotal := time.Now()
 		ctx, input := SetupCtxFromHTTPReq(r, false)
 		var req ReqType
 		err := json.Unmarshal(input, &req)
 		if err != nil {
 			panic(err)
 		}
+		tHandler := time.Now()
 		resp := handler(ctx, &req)
+		latency.Record("wrapper_handler", time.Since(tHandler))
 		respByte, err := json.Marshal(resp)
 		if err != nil {
 			panic(err)
 		}
 		PreReqEnd(ctx, cm.ReturnVal(respByte))
 		utility.DumpJson(resp, w)
+		latency.Record("wrapper_total", time.Since(tTotal))
 	}
 }

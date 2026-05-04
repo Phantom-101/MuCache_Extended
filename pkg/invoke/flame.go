@@ -9,8 +9,10 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/DKW2/MuCache_Extended/pkg/flame"
+	"github.com/DKW2/MuCache_Extended/pkg/latency"
 )
 
 // flameClients maps service name → RpcClient.
@@ -82,7 +84,9 @@ func flameInvoke(app string, method string, body []byte) []byte {
 	if c == nil {
 		panic(fmt.Sprintf("flameInvoke: no flame channel for app %q", app))
 	}
+	t0 := time.Now()
 	resp, err := c.Call(method, body)
+	latency.Record("flame_rpc_call", time.Since(t0))
 	if err != nil {
 		panic(fmt.Sprintf("flameInvoke(%s/%s): %v", app, method, err))
 	}

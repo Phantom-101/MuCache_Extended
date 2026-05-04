@@ -9,6 +9,7 @@ import (
 	dapr "github.com/dapr/go-sdk/client"
 	"github.com/DKW2/MuCache_Extended/pkg/cm"
 	"github.com/DKW2/MuCache_Extended/pkg/common"
+	"github.com/DKW2/MuCache_Extended/pkg/latency"
 	"github.com/DKW2/MuCache_Extended/pkg/utility"
 	"github.com/DKW2/MuCache_Extended/pkg/wrappers"
 	"github.com/golang/glog"
@@ -229,7 +230,9 @@ func upperboundParseJsonAndSaveToCache(
 
 // Saves the response to *res (also might save the result to cache if we are in upperbound baseline
 func performRequest[T interface{}](ctx context.Context, req *http.Request, res *T, app string, method string, argBytes []byte) {
+	t0 := time.Now()
 	resp, err := common.HTTPClient.Do(req)
+	latency.Record("http_rpc_call", time.Since(t0))
 	if err != nil {
 		panic(err)
 	}
@@ -239,8 +242,6 @@ func performRequest[T interface{}](ctx context.Context, req *http.Request, res *
 	utility.Assert(resp.StatusCode == http.StatusOK)
 	defer resp.Body.Close()
 	if common.UpperBoundEnabled && utility.IsCallReadOnly(app, method) {
-		// If we are in the upper bound baseline implementation,
-		// the caller saves its own cache if the call is read-only
 		upperboundParseJsonAndSaveToCache(ctx, resp.Body, res, app, method, argBytes)
 	} else {
 		utility.ParseJson(resp.Body, res)
@@ -251,7 +252,10 @@ func Invoke[T interface{}](ctx context.Context, app string, method string, input
 	if common.ShardEnabled {
 		return ShardInvoke[T](ctx, app, method, input)
 	}
+	tTotal := time.Now()
+	t0 := time.Now()
 	buf, err := json.Marshal(input)
+	latency.Record("invoke_marshal_req", time.Since(t0))
 	if err != nil {
 		panic(err)
 	}
@@ -259,10 +263,13 @@ func Invoke[T interface{}](ctx context.Context, app string, method string, input
 	// ── flame path: bypass cache/CM, send via shm ──
 	if common.FLAME {
 		respBytes := flameInvoke(app, method, buf)
+		t1 := time.Now()
 		var res T
 		if err := json.Unmarshal(respBytes, &res); err != nil {
 			panic(err)
 		}
+		latency.Record("invoke_unmarshal_resp", time.Since(t1))
+		latency.Record("invoke_total", time.Since(tTotal))
 		return res
 	}
 
@@ -286,6 +293,7 @@ func Invoke[T interface{}](ctx context.Context, app string, method string, input
 		req.Header.Set("method", method)
 	}
 	performRequest[T](ctx, req, &res, app, method, buf)
+	latency.Record("invoke_total", time.Since(tTotal))
 	return res
 }
 

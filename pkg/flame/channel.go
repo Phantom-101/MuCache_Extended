@@ -1,3 +1,6 @@
+//go:build flame
+// +build flame
+
 // Package flame provides Go bindings for the flame RPC (tcs_api).
 //
 // Each channel is bidirectional: a single channel name maps to one

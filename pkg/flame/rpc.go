@@ -1,3 +1,6 @@
+//go:build flame
+// +build flame
+
 package flame
 
 import (
@@ -5,6 +8,9 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/DKW2/MuCache_Extended/pkg/latency"
 )
 
 // RpcMsgSize is the fixed frame size for request/response messages.
@@ -148,15 +154,21 @@ func (c *RpcClient) Call(method string, body []byte) ([]byte, error) {
 	c.pending.Store(id, ch)
 	defer c.pending.Delete(id)
 
+	t0 := time.Now()
 	c.muSend.Lock()
+	latency.Record("rpc_send_lock_wait", time.Since(t0))
+	t1 := time.Now()
 	n := rpcEncodeRequest(c.sendBuf, id, method, body)
 	err := c.cl.Send(c.sendBuf[:n])
 	c.muSend.Unlock()
+	latency.Record("rpc_send", time.Since(t1))
 	if err != nil {
 		return nil, err
 	}
 
+	t2 := time.Now()
 	resp := <-ch
+	latency.Record("rpc_wait_response", time.Since(t2))
 	return resp, nil
 }
 
@@ -199,13 +211,17 @@ func NewRpcServer(name string, handler Handler) (*RpcServer, error) {
 			body := rpcDecodeBody(msg)
 
 			go func() {
+				t0 := time.Now()
 				respBody := handler(method, body)
+				latency.Record("rpc_server_handler", time.Since(t0))
 				buf := make([]byte, RpcMsgSize)
 				n := rpcEncodeResponse(buf, id, respBody)
 
+				t1 := time.Now()
 				s.muSend.Lock()
 				s.sv.Send(buf[:n])
 				s.muSend.Unlock()
+				latency.Record("rpc_server_send", time.Since(t1))
 			}()
 		}
 	}()
