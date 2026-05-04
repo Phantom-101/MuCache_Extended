@@ -9,14 +9,20 @@ target
 manifest.xml
 
 env.sh
+!scripts/distributed/env.sh
 
 # Build artifacts
 bin/
 /main
 /service1
+/service2
 
 # Logs
 logs/
+
+# Benchmark results (large; kept locally)
+results/
+latency_results/
 
 # OS
 .DS_Store
