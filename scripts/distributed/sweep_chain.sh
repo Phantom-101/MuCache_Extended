@@ -14,7 +14,7 @@ mkdir -p "$OUTDIR"
 FRONTEND_URL="http://$N1_PUBLIC_IP:3001"
 
 SUMMARY="$OUTDIR/summary.csv"
-echo "mode,concurrency,requests,p50_ms,p95_ms,p99_ms,rps,success_rate" > "$SUMMARY"
+echo "mode,concurrency,requests,p50_secs,p95_secs,p99_secs,rps,success_rate" > "$SUMMARY"
 
 log "chain sweep: modes=${MODES[*]}  c=${CONCURRENCIES[*]}  n=$N_REQUESTS  → $OUTDIR"
 
