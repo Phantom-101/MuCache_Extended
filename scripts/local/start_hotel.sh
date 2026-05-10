@@ -10,8 +10,10 @@
 #
 # Usage:
 #   ./scripts/local/start_hotel.sh              # HTTP (baseline)
-#   ./scripts/local/start_hotel.sh nocm         # same
-#   ./scripts/local/start_hotel.sh flame        # flame shm service-to-service
+#   ./scripts/local/start_hotel.sh http         # same
+#   ./scripts/local/start_hotel.sh tcs          # tcs shm service-to-service
+#   ./scripts/local/start_hotel.sh cq           # counter queue
+#   ./scripts/local/start_hotel.sh cq0          # counter queue no copy
 
 set -e
 
@@ -22,7 +24,7 @@ SVC_URL_FILE="$REPO_ROOT/experiments/local_services/hotel.txt"
 FLAME_BIN="/mydata/flame-benchmark/bin/flame_daemon"
 FLAME_READY_DIR="/tmp/flame_ready"
 
-MODE="${1:-nocm}"
+MODE="${1:-http}"
 
 mkdir -p "$LOGS" "$FLAME_READY_DIR"
 
@@ -94,7 +96,7 @@ log "Redis OK"
 # search   → rate                                       (1 channel)
 # Total: 6 bidirectional channels = 6 daemons
 
-if [[ "$MODE" == "flame" ]]; then
+if [[ "$MODE" == "tcs" ]]; then
     log "Starting flame daemons (6 bidirectional channels)..."
     for ch in fe_search fe_rate fe_reservation fe_profile fe_user search_rate; do
         start_daemon "$ch"
@@ -106,10 +108,10 @@ if [[ "$MODE" == "flame" ]]; then
 fi
 
 # ── binary suffix ──────────────────────────────────────────────────────────────
-SUFFIX="nocm"
-if [[ "$MODE" == "flame" ]]; then
-    SUFFIX="flame"
-fi
+SUFFIX="http"
+[[ "$MODE" == "tcs" ]] && SUFFIX="flame"
+[[ "$MODE" == "cq" ]] && SUFFIX="flame"
+[[ "$MODE" == "cq0" ]] && SUFFIX="flame"
 
 # ── start services ─────────────────────────────────────────────────────────────
 log "Starting hotel services (mode=$MODE)..."
@@ -117,24 +119,28 @@ log "Starting hotel services (mode=$MODE)..."
 # Leaf services first (no downstream)
 env PORT=4002 REDIS_URL="localhost:6379" \
     APP_NAME_NO_UNDERSCORES="rate" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAMS="fe_rate,search_rate" \
     "$BIN/hotel_rate_${SUFFIX}" > "$LOGS/rate.log" 2>&1 &
 log "  rate         → :4002  (upstream=fe_rate,search_rate)"
 
 env PORT=4003 REDIS_URL="localhost:6379" \
     APP_NAME_NO_UNDERSCORES="profile" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="fe_profile" \
     "$BIN/hotel_profile_${SUFFIX}" > "$LOGS/profile.log" 2>&1 &
 log "  profile      → :4003  (upstream=fe_profile)"
 
 env PORT=4004 REDIS_URL="localhost:6379" \
     APP_NAME_NO_UNDERSCORES="reservation" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="fe_reservation" \
     "$BIN/hotel_reservation_${SUFFIX}" > "$LOGS/reservation.log" 2>&1 &
 log "  reservation  → :4004  (upstream=fe_reservation)"
 
 env PORT=4005 REDIS_URL="localhost:6379" \
     APP_NAME_NO_UNDERSCORES="user" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="fe_user" \
     "$BIN/hotel_user_${SUFFIX}" > "$LOGS/user.log" 2>&1 &
 log "  user         → :4005  (upstream=fe_user)"
@@ -143,6 +149,7 @@ log "  user         → :4005  (upstream=fe_user)"
 env PORT=4001 REDIS_URL="localhost:6379" \
     APP_NAME_NO_UNDERSCORES="search" \
     SERVICE_URLS_FILE="$SVC_URL_FILE" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="fe_search" \
     FLAME_CHANNELS_FILE="$REPO_ROOT/experiments/local_flame/hotel_search.txt" \
     "$BIN/hotel_search_${SUFFIX}" > "$LOGS/search.log" 2>&1 &
@@ -152,6 +159,7 @@ log "  search       → :4001  (upstream=fe_search, downstream=rate)"
 env PORT=4000 REDIS_URL="localhost:6379" \
     APP_NAME_NO_UNDERSCORES="frontend" \
     SERVICE_URLS_FILE="$SVC_URL_FILE" \
+    FLAME_MODE="$MODE" \
     FLAME_CHANNELS_FILE="$REPO_ROOT/experiments/local_flame/hotel_frontend.txt" \
     "$BIN/hotel_frontend_${SUFFIX}" > "$LOGS/frontend.log" 2>&1 &
 log "  frontend     → :4000  (downstream=search,reservation,profile,user)"

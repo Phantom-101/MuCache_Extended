@@ -13,10 +13,10 @@ all: chain hotel boutique
 # ── chain benchmark ────────────────────────────────────────────────────────────
 
 chain: $(addprefix $(BINDIR)/chain_,\
-	$(addsuffix _nocm,  $(CHAIN_SERVICES)) \
+	$(addsuffix _http,  $(CHAIN_SERVICES)) \
 	$(addsuffix _flame, $(CHAIN_SERVICES)))
 
-$(BINDIR)/chain_%_nocm:
+$(BINDIR)/chain_%_http:
 	@mkdir -p $(BINDIR)
 	$(GO) build $(GOFLAGS) -o $@ ./cmd/chain/$*
 
@@ -27,10 +27,10 @@ $(BINDIR)/chain_%_flame:
 # ── hotel benchmark ────────────────────────────────────────────────────────────
 
 hotel: $(addprefix $(BINDIR)/hotel_,\
-	$(addsuffix _nocm,  $(HOTEL_SERVICES)) \
+	$(addsuffix _http,  $(HOTEL_SERVICES)) \
 	$(addsuffix _flame, $(HOTEL_SERVICES)))
 
-$(BINDIR)/hotel_%_nocm:
+$(BINDIR)/hotel_%_http:
 	@mkdir -p $(BINDIR)
 	$(GO) build $(GOFLAGS) -o $@ ./cmd/hotel/$*
 
@@ -41,10 +41,10 @@ $(BINDIR)/hotel_%_flame:
 # ── boutique benchmark ─────────────────────────────────────────────────────────
 
 boutique: $(addprefix $(BINDIR)/boutique_,\
-	$(addsuffix _nocm,  $(BOUTIQUE_SERVICES)) \
+	$(addsuffix _http,  $(BOUTIQUE_SERVICES)) \
 	$(addsuffix _flame, $(BOUTIQUE_SERVICES)))
 
-$(BINDIR)/boutique_%_nocm:
+$(BINDIR)/boutique_%_http:
 	@mkdir -p $(BINDIR)
 	$(GO) build $(GOFLAGS) -o $@ ./cmd/boutique/$*
 

@@ -3,13 +3,15 @@
 #
 # Topology:
 #   client → service1:3001 → service2:3002 → service3:3003 → service4:3004 → backend:3005
-#   (inter-service: HTTP in nocm mode, flame shm in flame mode)
+#   (inter-service: HTTP in http mode, tcs shm in tcs mode, counter queue in cq mode, counter queue no copy in cq0 mode)
 #   backend reads/writes Redis at localhost:6379
 #
 # Usage:
 #   ./scripts/local/start_chain.sh              # HTTP service-to-service (baseline)
-#   ./scripts/local/start_chain.sh nocm         # same as above (explicit)
-#   ./scripts/local/start_chain.sh flame        # flame shm service-to-service
+#   ./scripts/local/start_chain.sh http         # same as above (explicit)
+#   ./scripts/local/start_chain.sh tcs          # tcs shm service-to-service
+#   ./scripts/local/start_chain.sh cq           # counter queue
+#   ./scripts/local/start_chain.sh cq0          # counter queue no copy
 
 set -e
 
@@ -20,7 +22,7 @@ SVC_URL_FILE="$REPO_ROOT/experiments/local_services/chain.txt"
 FLAME_BIN="/mydata/flame-benchmark/bin/flame_daemon"
 FLAME_READY_DIR="/tmp/flame_ready"
 
-MODE="${1:-nocm}"   # nocm | flame
+MODE="${1:-http}"   # http | tcs | cq | cq0
 
 mkdir -p "$LOGS" "$FLAME_READY_DIR"
 
@@ -81,7 +83,7 @@ log "Redis OK"
 # hop2: service2 → service3
 # hop3: service3 → service4
 # hop4: service4 → backend
-if [[ "$MODE" == "flame" ]]; then
+if [[ "$MODE" == "tcs" ]]; then
     log "Starting flame daemons (4 bidirectional channels, one per hop)..."
     # tcs_api model: each channel name is bidirectional (req + resp inside one
     # PeerSharedMemory pair). One daemon per hop does both directions.
@@ -103,10 +105,10 @@ if [[ "$MODE" == "flame" ]]; then
 fi
 
 # ── binary suffix ──────────────────────────────────────────────────────────────
-SUFFIX="nocm"
-if [[ "$MODE" == "flame" ]]; then
-    SUFFIX="flame"
-fi
+SUFFIX="http"
+[[ "$MODE" == "tcs" ]] && SUFFIX="flame"
+[[ "$MODE" == "cq" ]] && SUFFIX="flame"
+[[ "$MODE" == "cq0" ]] && SUFFIX="flame"
 
 # ── start microservices ────────────────────────────────────────────────────────
 log "Starting microservices (mode=$MODE)..."
@@ -116,6 +118,7 @@ env PORT=3001 \
     REDIS_URL="localhost:6379" \
     SERVICE_URLS_FILE="$SVC_URL_FILE" \
     APP_NAME_NO_UNDERSCORES="service1" \
+    FLAME_MODE="$MODE" \
     FLAME_DOWNSTREAM="hop1" \
     FLAME_DOWNSTREAM_APP="service2" \
     "$BIN/chain_service1_${SUFFIX}" > "$LOGS/service1.log" 2>&1 &
@@ -126,6 +129,7 @@ env PORT=3002 \
     REDIS_URL="localhost:6379" \
     SERVICE_URLS_FILE="$SVC_URL_FILE" \
     APP_NAME_NO_UNDERSCORES="service2" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="hop1" \
     FLAME_DOWNSTREAM="hop2" \
     FLAME_DOWNSTREAM_APP="service3" \
@@ -137,6 +141,7 @@ env PORT=3003 \
     REDIS_URL="localhost:6379" \
     SERVICE_URLS_FILE="$SVC_URL_FILE" \
     APP_NAME_NO_UNDERSCORES="service3" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="hop2" \
     FLAME_DOWNSTREAM="hop3" \
     FLAME_DOWNSTREAM_APP="service4" \
@@ -148,6 +153,7 @@ env PORT=3004 \
     REDIS_URL="localhost:6379" \
     SERVICE_URLS_FILE="$SVC_URL_FILE" \
     APP_NAME_NO_UNDERSCORES="service4" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="hop3" \
     FLAME_DOWNSTREAM="hop4" \
     FLAME_DOWNSTREAM_APP="backend" \
@@ -158,6 +164,7 @@ log "  service4 → :3004  (upstream=hop3, downstream=hop4)"
 env PORT=3005 \
     REDIS_URL="localhost:6379" \
     APP_NAME_NO_UNDERSCORES="backend" \
+    FLAME_MODE="$MODE" \
     FLAME_UPSTREAM="hop4" \
     "$BIN/chain_backend_${SUFFIX}" > "$LOGS/backend.log" 2>&1 &
 log "  backend  → :3005  (upstream=hop4)"

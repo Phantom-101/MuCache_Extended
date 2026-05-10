@@ -28,10 +28,15 @@ import (
 
 // Config describes a flame channel.
 type Config struct {
+	Mode       int
 	Name       string
 	MsgSize    int  // fixed frame size in bytes
 	WindowSize int  // outstanding-message buffer depth per side (power-of-2-ish)
 	Blocking   bool // true = futex doorbells, false = spin-polling
+}
+
+func (c Config) mode() C.FlameMode {
+	return C.FlameMode(c.Mode)
 }
 
 func (c Config) msgSize() C.size_t {
@@ -69,7 +74,7 @@ func NewClient(cfg Config) (*Client, error) {
 	name := C.CString(cfg.Name)
 	defer C.free(unsafe.Pointer(name))
 
-	handle := C.flame_client_connect(name, cfg.msgSize(), cfg.window(), cfg.blocking())
+	handle := C.flame_client_connect(cfg.mode(), name, cfg.msgSize(), cfg.window(), cfg.blocking())
 	if handle == nil {
 		return nil, fmt.Errorf("flame_client_connect(%q)", cfg.Name)
 	}
@@ -129,7 +134,7 @@ func NewServer(cfg Config) (*Server, error) {
 	name := C.CString(cfg.Name)
 	defer C.free(unsafe.Pointer(name))
 
-	handle := C.flame_server_connect(name, cfg.msgSize(), cfg.window(), cfg.blocking())
+	handle := C.flame_server_connect(cfg.mode(), name, cfg.msgSize(), cfg.window(), cfg.blocking())
 	if handle == nil {
 		return nil, fmt.Errorf("flame_server_connect(%q)", cfg.Name)
 	}

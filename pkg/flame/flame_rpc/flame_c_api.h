@@ -29,6 +29,12 @@
 extern "C" {
 #endif
 
+typedef enum {
+    Tcs,
+    CounterQueue,
+    CounterQueueNoCopies
+} FlameMode;
+
 typedef struct FlameClient_ FlameClient;
 typedef struct FlameServer_ FlameServer;
 typedef struct FlameDaemon_ FlameDaemon;
@@ -42,7 +48,8 @@ typedef struct FlameDaemon_ FlameDaemon;
  *
  * Returns NULL on error (e.g. region already exists — unlink first).
  */
-FlameDaemon* flame_daemon_create(const char* name,
+FlameDaemon* flame_daemon_create(FlameMode mode,
+                                 const char* name,
                                  size_t      msg_size,
                                  uint32_t    window_size,
                                  int         blocking);
@@ -68,7 +75,8 @@ void flame_daemon_destroy(FlameDaemon* d);
  * Open <name>_cd (daemon must have created it) and attach as the client.
  * msg_size and window_size must match the daemon's configuration.
  */
-FlameClient* flame_client_connect(const char* name,
+FlameClient* flame_client_connect(FlameMode mode,
+                                  const char* name,
                                   size_t      msg_size,
                                   uint32_t    window_size,
                                   int         blocking);
@@ -91,7 +99,8 @@ void flame_client_destroy(FlameClient* c);
 
 /* ── Server ───────────────────────────────────────────────────────────────── */
 
-FlameServer* flame_server_connect(const char* name,
+FlameServer* flame_server_connect(FlameMode mode,
+                                  const char* name,
                                   size_t      msg_size,
                                   uint32_t    window_size,
                                   int         blocking);

@@ -3,9 +3,23 @@ package flame
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 )
+
+func getFlameMode() int {
+	switch mode := os.Getenv("FLAME_MODE"); mode {
+	case "tcs":
+		return 0
+	case "cq":
+		return 1
+	case "cq0":
+		return 2
+	default:
+		return -1
+	}
+}
 
 // RpcMsgSize is the fixed frame size for request/response messages.
 // Must be large enough for the biggest JSON payload in any benchmark.
@@ -105,7 +119,7 @@ const RpcWindowSize = 512
 
 // NewRpcClient connects to an existing bidirectional channel.
 func NewRpcClient(name string) (*RpcClient, error) {
-	cfg := Config{Name: name, MsgSize: RpcMsgSize, WindowSize: RpcWindowSize, Blocking: true}
+	cfg := Config{Mode: getFlameMode(), Name: name, MsgSize: RpcMsgSize, WindowSize: RpcWindowSize, Blocking: true}
 	cl, err := NewClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("RpcClient: %w", err)
@@ -178,7 +192,7 @@ type RpcServer struct {
 // NewRpcServer opens the channel and starts a goroutine that reads requests
 // and dispatches to handler. Each request handler runs in its own goroutine.
 func NewRpcServer(name string, handler Handler) (*RpcServer, error) {
-	cfg := Config{Name: name, MsgSize: RpcMsgSize, WindowSize: RpcWindowSize, Blocking: true}
+	cfg := Config{Mode: getFlameMode(), Name: name, MsgSize: RpcMsgSize, WindowSize: RpcWindowSize, Blocking: true}
 	sv, err := NewServer(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("RpcServer: %w", err)
