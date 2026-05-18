@@ -3,16 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/DKW2/MuCache_Extended/internal/twoservices"
+	"net/http"
+	"os"
+	"runtime"
+	"time"
+
+	twoserivces "github.com/DKW2/MuCache_Extended/internal/twoservices"
 	"github.com/DKW2/MuCache_Extended/pkg/common"
 	"github.com/DKW2/MuCache_Extended/pkg/flame"
 	"github.com/DKW2/MuCache_Extended/pkg/state"
 	"github.com/DKW2/MuCache_Extended/pkg/wrappers"
 	"github.com/golang/glog"
-	"net/http"
-	"os"
-	"runtime"
-	"time"
 	//"flag"
 	//_ "net/http/pprof"
 )
@@ -44,12 +45,28 @@ func write(ctx context.Context, req *twoserivces.WriteRequest) *string {
 	return &resp
 }
 
+func bigRead(ctx context.Context, req *twoserivces.ReadBulkRequest) *twoserivces.ReadBulkResponse {
+	vs := make([]int, len(req.Ks))
+	v, err := state.GetState[int](ctx, fmt.Sprint(req.Ks[0]))
+	if err != nil {
+		v = 0
+	}
+	for i := 0; i < len(req.Ks); i++ {
+		vs[i] = v
+	}
+	resp := twoserivces.ReadBulkResponse{Vs: vs}
+	return &resp
+}
+
 // readFlame / writeFlame are context-free handlers for flame mode.
 func readFlame(req twoserivces.ReadRequest) twoserivces.ReadResponse {
 	return *read(context.Background(), &req)
 }
 func writeFlame(req twoserivces.WriteRequest) string {
 	return *write(context.Background(), &req)
+}
+func bigReadFlame(req twoserivces.ReadBulkRequest) twoserivces.ReadBulkResponse {
+	return *bigRead(context.Background(), &req)
 }
 
 func main() {
@@ -62,8 +79,9 @@ func main() {
 
 	if common.FLAME {
 		flame.StartServer(flame.HandlerRegistry{
-			"ro_read": flame.WrapHandler(readFlame),
-			"write":   flame.WrapHandler(writeFlame),
+			"ro_read":  flame.WrapHandler(readFlame),
+			"write":    flame.WrapHandler(writeFlame),
+			"big_read": flame.WrapHandler(bigReadFlame),
 		})
 	}
 
@@ -74,6 +92,7 @@ func main() {
 	http.HandleFunc("/heartbeat", heartbeat)
 	http.HandleFunc("/ro_read", wrappers.ROWrapper[twoserivces.ReadRequest, twoserivces.ReadResponse](read))
 	http.HandleFunc("/write", wrappers.NonROWrapper[twoserivces.WriteRequest, string](write))
+	http.HandleFunc("/big_read", wrappers.ROWrapper[twoserivces.ReadBulkRequest, twoserivces.ReadBulkResponse](bigRead))
 	fmt.Printf("backend listening on :%s\n", port)
 	err := http.ListenAndServe(":"+port, nil)
 	if err != nil {
